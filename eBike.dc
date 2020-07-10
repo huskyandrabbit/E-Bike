@@ -1,0 +1,77 @@
+#Synthesis File for Telemetry and UART
+#######################################
+
+#***************#
+# Read Files in #
+#_______________#
+read_file -format sverilog {./A2D_intf.sv ./ADC128S.sv ./brushless.sv ./cadence_filt.sv ./desiredDrive.sv ./eBike.sv ./inert_intf.sv ./inertial_integrator.sv \
+./mtr_drv.sv ./nonoverlap.sv ./PB_intf.sv ./PB_rise.sv ./PID.sv ./PWM11.sv ./rst_synch.v ./SPI_ADC128S.sv ./sensorCondition.sv ./SPI_mstr.sv ./telemetry.sv ./UART_tx.sv }
+
+#**********************#
+# Set top level design #
+#______________________#
+set current_design eBike
+
+#**********************************#
+# Define Clock and Set don't touch #
+#__________________________________#
+create_clock -name "clk" -period 4 -waveform {0 1} {clk}
+set_dont_touch_network [find port clk]
+
+#*****************************************#
+# Set pointer for all inputs except clock #
+# and set input delay & drive             #  
+#_________________________________________#
+set prim_inputs [remove_from_collection [all_inputs] [find port clk]]
+set_input_delay -clock clk 0.5 $prim_inputs
+set_driving_cell -lib_cell NAND2X1_RVT -library saed32rvt_tt0p85v25c $prim_inputs
+set_drive 0.1 rst_n
+
+#*****************************************#
+# Set Clock Uncertainty                   #
+#_________________________________________#
+set_clock_uncertainty 0.12 clk
+
+#*****************************************#
+# Set output delay and load all outputs   #
+#_________________________________________#
+set_output_delay -clock clk 0.5 [all_outputs]
+set_fix_hold clk
+set_load 0.15 [all_outputs]
+
+
+#*****************************************#
+# Set Max Transmission time               #
+#_________________________________________#
+set_max_transition 0.15 [all_inputs]
+
+#*****************************************#
+# Set wire load model                     #
+#_________________________________________#
+set_wire_load_model -name 16000 -library saed32rvt_tt0p85v25c
+
+#*****************************************#
+# First Compile and then flatten          #
+#_________________________________________#
+compile -map_effort low
+
+ungroup -all -flatten
+compile -map_effort medium
+
+#*****************************************#
+# Report timing and Area and Check Design #
+#_________________________________________#
+report_timing -path full -delay max > eBike_max_delay.txt
+report_timing -path full -delay min > eBike_min_delay.txt
+
+
+report_timing > eBike_timing.txt
+report_area > eBike_area.txt
+
+check_design
+
+#*****************************************#
+#  Write out final netlist                #  
+#_________________________________________#
+write -format verilog eBike -output eBike.vg
+write_sdc eBike.sdc
